@@ -8,7 +8,7 @@ api_hash = '2e2a9ce500a5bd08bae56f6ac2cc4890'
 # Telegram session
 client = TelegramClient('taxi_session', api_id, api_hash)
 
-# Kalit so‘zlar (kichik harflarda)
+# Kalit so‘zlar
 keywords = set(map(str.lower, [
     'odam bor', 'odam bor 1', 'odam bor 1ta', 'odam bor 1 ta',
     'rishtonga odam bor', 'toshkentga odam bor',
@@ -26,11 +26,10 @@ keywords = set(map(str.lower, [
     'кампилек одам бор', 'компилект одам бор', 'комплек одам бор'
 ]))
 
-# Xabar yuboriladigan kanal yoki chat
+# Xabar yuboriladigan kanal
 target_chat = '@rozimuhammadTaxi'
 
-
-# Matnni tozalash (faqat kalit so‘zlarni qidirishda)
+# Matnni tozalash
 def clean_text(text):
     return re.sub(r'\s+', ' ', text.strip().lower())
 
@@ -38,7 +37,6 @@ def clean_text(text):
 @client.on(events.NewMessage(incoming=True))
 async def handler(event):
     try:
-        # Shaxsiy xabarlarni tashlab ketamiz
         if event.is_private or not event.raw_text:
             return
 
@@ -49,21 +47,27 @@ async def handler(event):
         if not any(k in text_clean for k in keywords):
             return
 
-        # Xabar qayerdan kelganligini aniqlaymiz
+        # Chat haqida ma’lumot
         chat = await event.get_chat()
+        sender = await event.get_sender()
+
+        # Guruh nomi va link
         if hasattr(chat, 'username') and chat.username:
-            link = f"https://t.me/{chat.username}/{event.id}"
-            name = chat.title or chat.username
-            source_line = f"{name} ({link})"
+            source_line = f"{chat.title or chat.username} (https://t.me/{chat.username}/{event.id})"
         else:
-            username = getattr(event.sender, 'username', None)
-            source_line = f"@{username} (Link yo‘q)" if username else "Shaxsiy yoki yopiq guruh"
+            source_line = f"{chat.title or 'Shaxsiy yoki yopiq guruh'}"
+
+        # Habar yuboruvchi (username va telefon)
+        username = f"@{sender.username}" if sender.username else "Username yo‘q"
+        phone = sender.phone if getattr(sender, "phone", None) else "Ko‘rinmaydi"
 
         # Yuboriladigan xabar
         message_to_send = (
             f"🚖 <b>Xabar topildi!</b>\n\n"
             f"📄 <b>Matn:</b>\n{text}\n\n"
             f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
+            f"👤 <b>Habar yuboruvchi:</b> {username}\n"
+            f"📞 <b>Telefon:</b> {phone}\n\n"
             f"🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
         )
 
