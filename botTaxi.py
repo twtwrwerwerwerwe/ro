@@ -47,7 +47,7 @@ async def handler(event):
         if not any(k in text_clean for k in keywords):
             return
 
-        # Chat haqida ma’lumot
+        # Chat va yuboruvchi haqida ma’lumot
         chat = await event.get_chat()
         sender = await event.get_sender()
 
@@ -57,9 +57,16 @@ async def handler(event):
         else:
             source_line = f"{chat.title or 'Shaxsiy yoki yopiq guruh'}"
 
-        # Habar yuboruvchi (username va telefon)
+        # Habar yuboruvchi username
         username = f"@{sender.username}" if sender.username else "Username yo‘q"
-        phone = sender.phone if getattr(sender, "phone", None) else "Ko‘rinmaydi"
+
+        # Telefon raqamni formatlash
+        if getattr(sender, "phone", None):
+            phone = sender.phone
+            if not phone.startswith("+"):  # agar + bilan boshlanmagan bo‘lsa
+                phone = f"+{phone}"
+        else:
+            phone = "Ko‘rinmaydi"
 
         # Yuboriladigan xabar
         message_to_send = (
