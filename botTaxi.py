@@ -5,6 +5,7 @@ import logging
 import tempfile
 import subprocess
 import difflib
+from datetime import datetime, timezone
 from telethon import TelegramClient, events
 from faster_whisper import WhisperModel
 
@@ -13,7 +14,7 @@ API_ID = 22731419
 API_HASH = "2e2a9ce500a5bd08bae56f6ac2cc4890"
 SESSION_NAME = "taxi_session"
 
-TARGET_CHAT = "@rozimuhammadTaxi"   # Qayta yuboriladigan kanal
+TARGET_CHAT = "@rozimuhammadTaxi"   # Qayta yuboriladigan kanal/guruh
 
 # Whisper model
 WHISPER_MODEL_SIZE = "tiny"
@@ -55,7 +56,7 @@ def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
 def fuzzy_match(text: str, keywords, cutoff=0.55) -> bool:
-    """Audio uchun kuchli fuzzy qidiruv"""
+    """Audio va matn uchun fuzzy qidiruv"""
     text = clean_text(text)
     if not text:
         return False
@@ -79,13 +80,6 @@ def fuzzy_match(text: str, keywords, cutoff=0.55) -> bool:
             if difflib.get_close_matches(word, kw_words, n=1, cutoff=cutoff):
                 return True
 
-    return False
-
-def exact_match(text: str, keywords) -> bool:
-    text = clean_text(text)
-    for kw in keywords:
-        if kw.lower() in text:
-            return True
     return False
 
 def format_username_and_phone(sender) -> tuple[str, str]:
@@ -126,11 +120,17 @@ def transcribe_audio(wav_path: str) -> str:
     )
     return " ".join([seg.text.strip() for seg in segments if seg.text]).strip()
 
-# ====== HANDLER ======
+# ====== YANGI HANDLER ======
 @client.on(events.NewMessage(incoming=True))
 async def handler(event):
     try:
         if event.is_private:
+            return
+
+        # faqat yangi xabar (eski xabarlarni tashlaymiz)
+        msg_time = event.message.date.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        if (now - msg_time).total_seconds() > 60:  # 1 daqiqadan eski bo‘lsa tashlab ketamiz
             return
 
         chat = await event.get_chat()
@@ -140,28 +140,12 @@ async def handler(event):
 
         # === AUDIO ===
         if is_audio_message(event):
-            with tempfile.TemporaryDirectory() as tmpd:
-                src_path = await event.message.download_media(file=tmpd)
-                wav_path = os.path.join(tmpd, "audio.wav")
-                ffmpeg_convert_to_wav(src_path, wav_path)
-                transcript = transcribe_audio(wav_path)
-
-                if fuzzy_match(transcript, KEYWORDS, cutoff=0.55):
-                    caption = (
-                        "🚖 <b>Xabar topildi!</b>\n\n"
-                        f"🎧 <b>Audio habar:</b>\n(Ovozli fayl ilova qilingan)\n\n"
-                        f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
-                        f"👤 <b>Habar yuboruvchi:</b> {username}\n"
-                        f"📞 <b>Telefon:</b> {phone}\n\n"
-                        "🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
-                    )
-                    await client.send_file(TARGET_CHAT, file=src_path, caption=caption, parse_mode="html")
-                    log.info("✅ Audio yuborildi.")
-                return
+            asyncio.create_task(process_audio(event, username, phone, source_line))
+            return
 
         # === MATN ===
         raw_text = (event.raw_text or "").strip()
-        if raw_text and exact_match(raw_text, KEYWORDS):
+        if raw_text and fuzzy_match(raw_text, KEYWORDS, cutoff=0.55):
             message_to_send = (
                 "🚖 <b>Xabar topildi!</b>\n\n"
                 f"📄 <b>Matn:</b>\n{raw_text}\n\n"
@@ -173,10 +157,33 @@ async def handler(event):
             await client.send_message(TARGET_CHAT, message_to_send, parse_mode="html")
             log.info("✅ Matn yuborildi.")
 
+    except Exception:
+        log.exception("Xatolik yuz berdi")
+
+# ====== AUDIO PROCESSOR (async parallel) ======
+async def process_audio(event, username, phone, source_line):
+    try:
+        with tempfile.TemporaryDirectory() as tmpd:
+            src_path = await event.message.download_media(file=tmpd)
+            wav_path = os.path.join(tmpd, "audio.wav")
+            ffmpeg_convert_to_wav(src_path, wav_path)
+            transcript = transcribe_audio(wav_path)
+
+            if fuzzy_match(transcript, KEYWORDS, cutoff=0.55):
+                caption = (
+                    "🚖 <b>Xabar topildi!</b>\n\n"
+                    f"🎧 <b>Audio habar:</b>\n(Ovozli fayl ilova qilingan)\n\n"
+                    f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
+                    f"👤 <b>Habar yuboruvchi:</b> {username}\n"
+                    f"📞 <b>Telefon:</b> {phone}\n\n"
+                    "🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
+                )
+                await client.send_file(TARGET_CHAT, file=src_path, caption=caption, parse_mode="html")
+                log.info("✅ Audio yuborildi.")
     except subprocess.CalledProcessError:
         log.exception("ffmpeg konvertatsiya xatosi")
     except Exception:
-        log.exception("Xatolik yuz berdi")
+        log.exception("Audio qayta ishlashda xatolik")
 
 # ====== ISHGA TUSHIRISH ======
 if __name__ == "__main__":
