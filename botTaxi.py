@@ -1,4 +1,3 @@
-import hashlib
 import re
 from telethon import TelegramClient, events
 
@@ -6,9 +5,10 @@ from telethon import TelegramClient, events
 api_id = 22731419
 api_hash = '2e2a9ce500a5bd08bae56f6ac2cc4890'
 
+# Telegram session
 client = TelegramClient('taxi_session', api_id, api_hash)
 
-# Kalit so'zlar (kichik harflarda)
+# Kalit so‘zlar (kichik harflarda)
 keywords = set(map(str.lower, [
     'odam bor', 'odam bor 1', 'odam bor 1ta', 'odam bor 1 ta',
     'rishtonga odam bor', 'toshkentga odam bor',
@@ -29,36 +29,25 @@ keywords = set(map(str.lower, [
 # Xabar yuboriladigan kanal yoki chat
 target_chat = '@rozimuhammadTaxi'
 
-# Ko‘rilgan xabarlar uchun hash ro‘yxati
-seen_hashes = set()
 
-# Matnni tozalash funksiyasi (fayzni hash uchun)
+# Matnni tozalash (faqat kalit so‘zlarni qidirishda)
 def clean_text(text):
     return re.sub(r'\s+', ' ', text.strip().lower())
 
-# Hash yaratish
-def get_md5(text):
-    return hashlib.md5(text.encode('utf-8')).hexdigest()
 
 @client.on(events.NewMessage(incoming=True))
 async def handler(event):
     try:
+        # Shaxsiy xabarlarni tashlab ketamiz
         if event.is_private or not event.raw_text:
             return
 
         text = event.raw_text.strip()
         text_clean = clean_text(text)
 
-        # Kalit so‘zlar borligini tekshiramiz (tozalangan matnda)
+        # Kalit so‘zlarni tekshirish
         if not any(k in text_clean for k in keywords):
             return
-
-        # Xabar matni + guruh id kombinatsiyasi orqali hash
-        chat_id = event.chat_id or 0
-        text_hash = get_md5(f"{text_clean}:{chat_id}")
-        if text_hash in seen_hashes:
-            return
-        seen_hashes.add(text_hash)
 
         # Xabar qayerdan kelganligini aniqlaymiz
         chat = await event.get_chat()
@@ -83,6 +72,7 @@ async def handler(event):
 
     except Exception as e:
         print("❌ Xatolik:", e)
+
 
 print("🚕 Taxi bot ishga tushdi...")
 client.start()
