@@ -86,9 +86,9 @@ async def handler(event):
         chat = await event.get_chat()
         if hasattr(chat, 'username') and chat.username:
             link = f"https://t.me/{chat.username}/{event.id}"
-            source_line = f"Habar egasi linki: {link}"
+            group_line = f"Guruh linki: {link} ({chat.title})"
         else:
-            source_line = "Habar egasi: Berkitilgan"
+            group_line = "Guruh linki: Berkitilgan"
 
         # Username va telefon raqamini olish
         sender = await event.get_sender()
@@ -102,8 +102,8 @@ async def handler(event):
         message_to_send = (
             f"🚖 <b>Xabar topildi!</b>\n\n"
             f"📄 <b>Matn:</b>\n{text}\n\n"
-            f"📍 <b>{source_line}</b>\n"
-            f"👤 <b>Habar egasi:</b> {username_str}\n"
+            f"📍 <b>{group_line}</b>\n\n"
+            f"👤 <b>Habar egasi:</b> {username_str}\n\n"
             f"📞 <b>Habar egasi raqami:</b> {phone_str}\n\n"
             f"🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
         )
