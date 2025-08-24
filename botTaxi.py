@@ -1,43 +1,43 @@
 import os
 import re
-import asyncio
 import logging
 import tempfile
 import subprocess
-from datetime import datetime, timezone
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from telethon import TelegramClient, events
 from faster_whisper import WhisperModel
-import difflib
+from difflib import SequenceMatcher
 
 # ====== SOZLAMALAR ======
 API_ID = 22731419
 API_HASH = "2e2a9ce500a5bd08bae56f6ac2cc4890"
 SESSION_NAME = "taxi_session"
-
-TARGET_CHAT = "@rozimuhammadTaxi"   # Qayta yuboriladigan kanal/guruh
+TARGET_CHAT = "@rozimuhammadTaxi"
 
 # Whisper model
 WHISPER_MODEL_SIZE = "tiny"
 WHISPER_COMPUTE_TYPE = "int8"
 TRANSCRIBE_LANGUAGE = "uz"
 
-# ====== KALIT SO‘ZLAR ======
-# Faqat matnli xabarlar uchun
-ALLOWED_KEYWORDS = [
-    "olamiz va yuramiz", "odam bor", "mashina kerak"
+# Kalit so'zlar
+KEYWORDS = [
+    'odam bor', 'odam bor 1', 'odam bor 1ta', 'odam bor 1 ta',
+    'rishtonga odam bor', 'toshkentga odam bor',
+    'pochta bor', 'rishtonga pochta bor', 'toshkentga pochta bor',
+    'ketadi', 'ketishadi', 'ketishi kerak',
+    'mashina kerak', 'kampilek odam bor', 'kampilek odam', 'komplekt odam', 'kampilekt', 'komplekt odam',
+    # kirillcha
+    'одам бор', 'одам бор 1', 'риштонга одам бор',
+    'почта бор', 'тошкентга почта бор',
+    'кетади', 'кетишади', 'машина керак', 'кампилек одам бор'
 ]
 
-# Rad etiladigan kalit so‘zlar (ruscha harflar ham)
-BLOCK_KEYWORDS = [
-    "почта", "КОБИЛТЬ", "ТОМ БАГАЖ", "Хизмат", "Чикораслар",
-    "авто", "автo", "автoмобиль"
-]
-
-# ====== LOGGING ======
+# Logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("taxi-bot")
 
-# ====== TELETHON KLIENT ======
+# Telegram client
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 # Whisper model yuklash
@@ -45,53 +45,23 @@ log.info("Whisper model yuklanmoqda...")
 whisper_model = WhisperModel(WHISPER_MODEL_SIZE, compute_type=WHISPER_COMPUTE_TYPE)
 log.info("Whisper model tayyor.")
 
+# ThreadPool executor (audio transkripsiya uchun)
+executor = ThreadPoolExecutor(max_workers=6)  # ko'proq parallel
+
 # ====== FUNKSIYALAR ======
 def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
-def fuzzy_match(text: str, keywords, cutoff=0.55) -> bool:
-    """Audio va matn uchun fuzzy qidiruv"""
+def exact_match(text: str) -> bool:
     text = clean_text(text)
-    if not text:
-        return False
+    return any(kw.lower() in text for kw in KEYWORDS)
 
-    # To‘g‘ridan-to‘g‘ri ichida bormi?
-    for kw in keywords:
-        if kw.lower() in text:
-            return True
+def fuzzy_match(text: str, cutoff=0.5) -> bool:
+    """Sezgirroq audio xabar uchun o'xshashlik"""
+    text = clean_text(text)
+    return any(SequenceMatcher(None, text, kw.lower()).ratio() >= cutoff for kw in KEYWORDS)
 
-    # Yaqqol o‘xshash jumla
-    for kw in keywords:
-        ratio = difflib.SequenceMatcher(None, text, kw.lower()).ratio()
-        if ratio >= cutoff:
-            return True
-
-    # So‘zlar bo‘yicha yaqinlik
-    words = text.split()
-    for kw in keywords:
-        kw_words = kw.lower().split()
-        for word in words:
-            if difflib.get_close_matches(word, kw_words, n=1, cutoff=cutoff):
-                return True
-
-    return False
-
-def format_username_and_phone(sender) -> tuple[str, str]:
-    username = f"@{sender.username}" if getattr(sender, "username", None) else "Username yo‘q"
-    raw_phone = getattr(sender, "phone", None)
-    if raw_phone:
-        phone = raw_phone if raw_phone.startswith("+") else f"+{raw_phone}"
-    else:
-        phone = "Ko‘rinmaydi"
-    return username, phone
-
-def build_source_line(chat, message_id: int) -> str:
-    if hasattr(chat, "username") and chat.username:
-        return f"{chat.title or chat.username} (https://t.me/{chat.username}/{message_id})"
-    return f"{chat.title or 'Shaxsiy yoki yopiq guruh'}"
-
-def is_audio_message(event) -> bool:
-    msg = event.message
+def is_audio_message(msg) -> bool:
     if not msg or not msg.media:
         return False
     mime = getattr(getattr(msg, "document", None), "mime_type", "") or ""
@@ -106,7 +76,7 @@ def ffmpeg_convert_to_wav(src_path: str, dst_path: str) -> None:
     cmd = ["ffmpeg", "-y", "-i", src_path, "-ac", "1", "-ar", "16000", dst_path]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
-def transcribe_audio(wav_path: str) -> str:
+def transcribe_audio_sync(wav_path: str) -> str:
     segments, _ = whisper_model.transcribe(
         wav_path,
         language=TRANSCRIBE_LANGUAGE,
@@ -114,79 +84,58 @@ def transcribe_audio(wav_path: str) -> str:
     )
     return " ".join([seg.text.strip() for seg in segments if seg.text]).strip()
 
-# ====== MATNLI XABAR UCHUN FILTRLASH ======
-def match_text_message(text: str) -> bool:
-    text_clean = clean_text(text)
-    if not text_clean:
-        return False
+async def transcribe_audio_async(wav_path: str) -> str:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(executor, transcribe_audio_sync, wav_path)
 
-    # Rad etiladigan kalit so‘zlar bor-yo‘qligini tekshirish
-    block_present = any(bk.lower() in text_clean for bk in BLOCK_KEYWORDS)
-    allow_present = any(ak.lower() in text_clean for ak in ALLOWED_KEYWORDS)
+def format_username_and_phone(sender) -> tuple[str, str]:
+    username = f"@{sender.username}" if getattr(sender, "username", None) else "Username yo‘q"
+    raw_phone = getattr(sender, "phone", None)
+    phone = raw_phone if raw_phone and raw_phone.startswith("+") else f"+{raw_phone}" if raw_phone else "Ko‘rinmaydi"
+    return username, phone
 
-    if allow_present:
-        # Agar ruxsat berilgan kalit so‘z bo‘lsa, rad etiladigan bo‘lsa ham olinadi
-        return True
-    else:
-        # Agar ruxsat berilgan kalit so‘z bo‘lmasa, tashlab ket
-        return False
+def build_source_line(chat, message_id: int) -> str:
+    if hasattr(chat, "username") and chat.username:
+        return f"{chat.title or chat.username} (https://t.me/{chat.username}/{message_id})"
+    return f"{chat.title or 'Shaxsiy yoki yopiq guruh'}"
 
-# ====== AUDIO XABAR UCHUN FILTRLASH ======
-def match_audio_message(text: str) -> bool:
-    # Audio xabarlar uchun fuzzy qidiruv
-    return fuzzy_match(text, ALLOWED_KEYWORDS, cutoff=0.55)
+async def process_message(event):
+    chat = await event.get_chat()
+    sender = await event.get_sender()
+    username, phone = format_username_and_phone(sender)
+    source_line = build_source_line(chat, event.id)
 
-# ====== AUDIO PROCESSOR ======
-async def process_audio(event, username, phone, source_line):
-    try:
-        with tempfile.TemporaryDirectory() as tmpd:
-            src_path = await event.message.download_media(file=tmpd)
-            wav_path = os.path.join(tmpd, "audio.wav")
-            ffmpeg_convert_to_wav(src_path, wav_path)
-            transcript = transcribe_audio(wav_path)
+    msg = event.message
 
-            if match_audio_message(transcript):
-                caption = (
-                    "🚖 <b>Xabar topildi!</b>\n\n"
-                    f"🎧 <b>Audio habar:</b>\n(Ovozli fayl ilova qilingan)\n\n"
-                    f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
-                    f"👤 <b>Habar yuboruvchi:</b> {username}\n"
-                    f"📞 <b>Telefon:</b> {phone}\n\n"
-                    "🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
-                )
-                await client.send_file(TARGET_CHAT, file=src_path, caption=caption, parse_mode="html")
-                log.info("✅ Audio yuborildi.")
-    except subprocess.CalledProcessError:
-        log.exception("ffmpeg konvertatsiya xatosi")
-    except Exception:
-        log.exception("Audio qayta ishlashda xatolik")
+    # ===== Audio xabar =====
+    if is_audio_message(msg):
+        try:
+            with tempfile.TemporaryDirectory() as tmpd:
+                src_path = await msg.download_media(file=tmpd)
+                wav_path = os.path.join(tmpd, "audio.wav")
+                ffmpeg_convert_to_wav(src_path, wav_path)
 
-# ====== HANDLER ======
-@client.on(events.NewMessage(incoming=True))
-async def handler(event):
-    try:
-        if event.is_private:
-            return
+                transcript = await transcribe_audio_async(wav_path)
 
-        # Faqat yangi xabar (1 daqiqadan eski bo‘lsa tashlaymiz)
-        msg_time = event.message.date.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
-        if (now - msg_time).total_seconds() > 60:
-            return
+                if transcript and fuzzy_match(transcript, cutoff=0.5):  # o'xshashlikni sezgirroq qildik
+                    caption = (
+                        "🚖 <b>Xabar topildi!</b>\n\n"
+                        f"🎧 <b>Audio habar:</b>\n(Ovozli fayl ilova qilingan)\n\n"
+                        f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
+                        f"👤 <b>Habar yuboruvchi:</b> {username}\n"
+                        f"📞 <b>Telefon:</b> {phone}\n\n"
+                        "🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
+                    )
+                    await client.send_file(TARGET_CHAT, file=src_path, caption=caption, parse_mode="html")
+                    log.info("✅ Audio yuborildi.")
+        except Exception:
+            log.exception("Audio xabarni qayta ishlashda xatolik yuz berdi")
+        return
 
-        chat = await event.get_chat()
-        sender = await event.get_sender()
-        source_line = build_source_line(chat, event.id)
-        username, phone = format_username_and_phone(sender)
-
-        # === AUDIO ===
-        if is_audio_message(event):
-            asyncio.create_task(process_audio(event, username, phone, source_line))
-            return
-
-        # === MATN ===
-        raw_text = (event.raw_text or "").strip()
-        if raw_text and match_text_message(raw_text):
+    # ===== Matnli xabar =====
+    raw_text = (msg.raw_text or "").strip()
+    if raw_text and exact_match(raw_text):
+        try:
             message_to_send = (
                 "🚖 <b>Xabar topildi!</b>\n\n"
                 f"📄 <b>Matn:</b>\n{raw_text}\n\n"
@@ -197,11 +146,20 @@ async def handler(event):
             )
             await client.send_message(TARGET_CHAT, message_to_send, parse_mode="html")
             log.info("✅ Matn yuborildi.")
+        except Exception:
+            log.exception("Matn xabarni yuborishda xatolik yuz berdi")
 
+# ===== Handler =====
+@client.on(events.NewMessage(incoming=True))
+async def new_message_handler(event):
+    try:
+        if event.is_private:
+            return
+        await process_message(event)
     except Exception:
         log.exception("Xatolik yuz berdi")
 
-# ====== ISHGA TUSHIRISH ======
+# ===== Ishga tushirish =====
 if __name__ == "__main__":
     print("🚕 Taxi bot ishga tushdi...")
     with client:
