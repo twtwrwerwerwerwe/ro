@@ -26,7 +26,7 @@ KEYWORDS = [
     'rishtonga odam bor', 'toshkentga odam bor',
     'pochta bor', 'rishtonga pochta bor', 'toshkentga pochta bor',
     'ketadi', 'ketishadi', 'ketishi kerak',
-    'mashina kerak', 'kampilek odam bor', 'kampilek odam', 'komplekt odam', 'kampilekt', 'komplekt odam',
+    'mashina kerak', 'kampilek odam bor', 'kampilek odam', 'komplekt odam', 'kampilekt', 'komplekt odam', 'odam bor ekan', 'odam borakan', 'odam borkan'
     # kirillcha
     'одам бор', 'одам бор 1', 'риштонга одам бор',
     'почта бор', 'тошкентга почта бор',
