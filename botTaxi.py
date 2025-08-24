@@ -8,29 +8,64 @@ api_hash = '2e2a9ce500a5bd08bae56f6ac2cc4890'
 # Telegram session
 client = TelegramClient('taxi_session', api_id, api_hash)
 
-# Kalit so‘zlar (kichik harflarda)
-keywords = set(map(str.lower, [
+# Kalit so‘zlar (faqat kichik harflarda)
+keywords = [
+    # Odam bor variantlari
     'odam bor', 'odam bor 1', 'odam bor 1ta', 'odam bor 1 ta',
-    'rishtonga odam bor', 'toshkentga odam bor',
-    'pochta bor', 'rishtonga pochta bor', 'rishtondan pochta bor',
-    'toshkentga pochta bor', 'toshkentdan pochta bor',
-    'ketadi', 'ketishadi', 'ketishi kerak', 'ketishi', 'ayol kishi ketadi',
-    'mashina kerak', 'mashina kere', 'mashina kerek',
-    'kampilek odam bor', 'kompilekt odam bor', 'komplek odam bor',
+    'tortta odam bor', "to'rtta odam bor", 'odambor', 'odam borakan', 'odam bor ekan',
+    'bitta odam bor', 'ikkita odam bor', 'bita odam bor', 'ikta odam bor',
+    'uchta odam bor', 'bir kamplekt odam bor', 'br kamplek odam bor', 'bir komplekt odam bor',
+
+    # Ruscha o‘zbekcha yozilishlar
     'одам бор', 'одам бор 1', 'одам бор 1та', 'одам бор 1 та',
+    'тортта одам бор', "то'ртта одам бор", 'одамбoр', 'одам боракан', 'одам бор экан',
+    'битта одам бор', 'иккита одам бор', 'бита одам бор', 'икта одам бор',
+    'учта одам бор', 'бир кampleкт одам бор', 'бр кampleк одам бор', 'бир комплект одам бор',
+
+    # Rishton/Toshkentga odam bor
+    'rishtonga odam bor', 'toshkentga odam bor',
     'риштонга одам бор', 'тошкентга одам бор',
-    'почта бор', 'риштонга почта бор', 'риштондон почта бор',
-    'тошкентга почта бор', 'тошкентдан почта бор',
-    'кетади', 'кетишади', 'кетиши керак', 'кетиши', 'айол киши кетади',
-    'машина керак', 'машина кере', 'машина керек',
-    'кампилек одам бор', 'компилект одам бор', 'комплек одам бор'
-]))
+
+    # Mashina kerak
+    'mashina kerak', 'mashina kere', 'mashina kerek', 'bagajli mashina kerak', 'bagajli mashina kere',
+    'машина керак', 'машина керe', 'машина керек', 'багажли машина керак', 'багажли машина кере',
+
+    # Pochta bor
+    'pochta bor', 'rishtonga pochta bor', 'rishtondan pochta bor', 'toshkentga pochta bor', 'toshkentdan pochta bor',
+    'почта бор', 'риштонга почта бор', 'риштондан почта бор', 'тошкентга почта бор', 'тошкентдан почта бор',
+
+    # Kishi soni bor
+    '1 kishi bor', '2 kishi bor', '3 kishi bor', '4 kishi bor',
+    '1kishi bor', '2kishi bor', '3kishi bor', '4kishi bor',
+    '2ta odam bor', 'odam bor 2 ta', '3ta odam bor', 'odam bor 3ta', 'odam bor 3 ta',
+    '4ta odam bor', 'odam bor 4ta', 'odam bor 4 ta',
+    '1 киши бор', '2 киши бор', '3 киши бор', '4 киши бор',
+    '1киши бор', '2киши бор', '3киши бор', '4киши бор',
+    '2та одам бор', 'одам бор 2 та', '3та одам бор', 'одам бор 3та', 'одам бор 3 та',
+    '4та одам бор', 'одам бор 4та', 'одам бор 4 та',
+
+    # Ketadi
+    'ketadi', 'ketishadi', 'ketishi kerak', 'ketishi', 'ayol kishi ketadi',
+    'кeтaди', 'кeтишaди', 'кeтиши кeрaк', 'кeтиши', 'ayол киши кeтaди',
+
+    # Kampilekt
+    'kampilek odam bor', 'kompilekt odam bor', 'komplek odam bor',
+    'kampilek одам бор', 'kompilekt одам бор', 'komplek одам бор',
+
+    # Dastavka
+    'dastavka bor', 'dastafka',
+    'даставка бор', 'дастaфка',
+
+    # Mashina kerak boshqa
+    'mashina keraa', 'машина кераа',
+]
+
 
 # Xabar yuboriladigan kanal yoki chat
 target_chat = '@rozimuhammadTaxi'
 
 
-# Matnni tozalash (faqat kalit so‘zlarni qidirishda)
+# Matnni tekshirish uchun tayyorlash
 def clean_text(text):
     return re.sub(r'\s+', ' ', text.strip().lower())
 
@@ -42,10 +77,10 @@ async def handler(event):
         if event.is_private or not event.raw_text:
             return
 
-        text = event.raw_text.strip()
-        text_clean = clean_text(text)
+        text = event.raw_text.strip()           # Asl matn (yuborish uchun)
+        text_clean = clean_text(text)           # Kichik harfga o'tkazilgan matn (tekshirish uchun)
 
-        # Kalit so‘zlarni tekshirish
+        # Kalit so‘zlarni tekshirish (lower() bilan)
         if not any(k in text_clean for k in keywords):
             return
 
@@ -59,7 +94,7 @@ async def handler(event):
             username = getattr(event.sender, 'username', None)
             source_line = f"@{username} (Link yo‘q)" if username else "Shaxsiy yoki yopiq guruh"
 
-        # Yuboriladigan xabar
+        # Yuboriladigan xabar (matn asl holatda chiqadi)
         message_to_send = (
             f"🚖 <b>Xabar topildi!</b>\n\n"
             f"📄 <b>Matn:</b>\n{text}\n\n"
