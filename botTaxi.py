@@ -60,10 +60,8 @@ keywords = [
     'mashina keraa', 'машина кераа',
 ]
 
-
 # Xabar yuboriladigan kanal yoki chat
 target_chat = '@rozimuhammadTaxi'
-
 
 # Matnni tekshirish uchun tayyorlash
 def clean_text(text):
@@ -80,7 +78,7 @@ async def handler(event):
         text = event.raw_text.strip()           # Asl matn (yuborish uchun)
         text_clean = clean_text(text)           # Kichik harfga o'tkazilgan matn (tekshirish uchun)
 
-        # Kalit so‘zlarni tekshirish (lower() bilan)
+        # Kalit so‘zlarni tekshirish
         if not any(k in text_clean for k in keywords):
             return
 
@@ -91,14 +89,23 @@ async def handler(event):
             name = chat.title or chat.username
             source_line = f"{name} ({link})"
         else:
-            username = getattr(event.sender, 'username', None)
-            source_line = f"@{username} (Link yo‘q)" if username else "Shaxsiy yoki yopiq guruh"
+            source_line = "Shaxsiy yoki yopiq guruh"
 
-        # Yuboriladigan xabar (matn asl holatda chiqadi)
+        # Username va telefon raqamini olish
+        sender = await event.get_sender()
+        username = getattr(sender, 'username', None)
+        phone = getattr(sender, 'phone', None)
+
+        username_str = f"@{username}" if username else "Berkitilgan"
+        phone_str = f"{phone}" if phone else "Berkitilgan"
+
+        # Yuboriladigan xabar
         message_to_send = (
             f"🚖 <b>Xabar topildi!</b>\n\n"
             f"📄 <b>Matn:</b>\n{text}\n\n"
             f"📍 <b>Qayerdan:</b>\n{source_line}\n\n"
+            f"👤 <b>Yozuvchi linki:</b> {username_str}\n"
+            f"📞 <b>Yozuvchi raqami:</b> {phone_str}\n\n"
             f"🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
         )
 
