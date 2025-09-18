@@ -2,8 +2,8 @@ import re
 from telethon import TelegramClient, events
 
 # API ma'lumotlari
-api_id = 22731419
-api_hash = '2e2a9ce500a5bd08bae56f6ac2cc4890'
+api_id = 28197641
+api_hash = '690af6f573241c8d2b0bf468ca2b9d89'
 
 # Telegram session
 client = TelegramClient('taxi_session', api_id, api_hash)
