@@ -2,8 +2,8 @@ import re
 from telethon import TelegramClient, events
 
 # API ma'lumotlari
-api_id = 28197641
-api_hash = '690af6f573241c8d2b0bf468ca2b9d89'
+api_id = 28023612
+api_hash = 'fe94ef46addc1b6b8253d5448e8511f0'
 
 # Telegram session
 client = TelegramClient('taxi_session', api_id, api_hash)
@@ -61,7 +61,7 @@ keywords = [
 ]
 
 # Xabar yuboriladigan kanal yoki chat
-target_chat = '@rozimuhammadTaxi'
+target_chat = 'https://t.me/+BFl15wH-PAswZTYy'
 
 # Matnni tekshirish uchun tayyorlash
 def clean_text(text):
