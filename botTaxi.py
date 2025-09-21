@@ -57,7 +57,8 @@ keywords = [
     'даставка бор', 'дастaфка',
 
     # Mashina kerak boshqa
-    'mashina keraa', 'машина кераа',
+    'mashina keraa', 'машина кераа', 'Toshkentdan Qoqonga odam bor', "Toshkendan Qo'qonga odam bor", "Toshkentdan Fargonaga odam bor", "Toshkentdan Farg'onaga odam bor", 
+    "Toshkendan Fargonaga odam bor", "Bosh mashina kerak", "Bosh mashina bormikan", "Boshi bormikan" 
 ]
 
 # Xabar yuboriladigan kanal yoki chat
