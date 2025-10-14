@@ -28,7 +28,7 @@ keywords = [
 
     # Mashina kerak
     'mashina kerak', 'mashina kere', 'mashina kerek', 'bagajli mashina kerak', 'bagajli mashina kere',
-    'машина керак', 'машина керe', 'машина керек', 'багажли машина керак', 'багажли машина кере',
+    'машина керак', 'машина керe', 'машина нужен', 'багажли машина керак', 'багажли машина кере',
 
     # Pochta bor
     'pochta bor', 'rishtonga pochta bor', 'rishtondan pochta bor', 'toshkentga pochta bor', 'toshkentdan pochta bor',
@@ -57,7 +57,8 @@ keywords = [
     'даставка бор', 'дастaфка',
 
     # Mashina kerak boshqa
-    'mashina keraa', 'машина кераа', 'Toshkentdan Qoqonga odam bor', "Toshkendan Qo'qonga odam bor", "Toshkentdan Fargonaga odam bor", "Toshkentdan Farg'onaga odam bor", 
+    'mashina keraa', 'машина кераа', 'Toshkentdan Qoqonga odam bor', "Toshkendan Qo'qonga odam bor", 
+    "Toshkentdan Fargonaga odam bor", "Toshkentdan Farg'onaga odam bor", 
     "Toshkendan Fargonaga odam bor", "Bosh mashina kerak", "Bosh mashina bormikan", "Boshi bormikan" 
 ]
 
@@ -68,6 +69,30 @@ target_chat = 'https://t.me/+BFl15wH-PAswZTYy'
 def clean_text(text):
     return re.sub(r'\s+', ' ', text.strip().lower())
 
+# Matndan raqam topish (turli formatlarga mos)
+def find_phone_in_text(text):
+    # turli formatlarni qamrab oluvchi regex:
+    # misollar: +998901234567, 90 123 45 67, 90-123-45-67, 901234567, 998901234567
+    patterns = [
+        r'\+?998[\s\-\.\(]*\d{2}[\s\-\.\)]*\d{3}[\s\-\.\)]*\d{2}[\s\-\.\)]*\d{2}',  # +998 90 123 45 67
+        r'\b\d{2}[\s\-\.\)]*\d{3}[\s\-\.\)]*\d{2}[\s\-\.\)]*\d{2}\b',            # 90 123 45 67 or 901234567
+        r'\b\d{9}\b'                                                              # 901234567
+    ]
+    for p in patterns:
+        m = re.search(p, text)
+        if m:
+            num = re.sub(r'\D', '', m.group())
+            # agar 12 ta raqam (998901234567) bo'lsa +998... shakliga o'tkazamiz
+            if num.startswith('998') and len(num) >= 12:
+                return f"+{num[:12]}"
+            # agar 9 ta (901234567) bo'lsa +998 qo'shamiz
+            if len(num) == 9:
+                return f"+998{num}"
+            # agar 11-12 ta boshqa shakl bo'lsa ham + qo'shamiz
+            if len(num) >= 10:
+                return f"+{num}"
+    return None
+
 
 @client.on(events.NewMessage(incoming=True))
 async def handler(event):
@@ -76,8 +101,8 @@ async def handler(event):
         if event.is_private or not event.raw_text:
             return
 
-        text = event.raw_text.strip()           # Asl matn (yuborish uchun)
-        text_clean = clean_text(text)           # Kichik harfga o'tkazilgan matn (tekshirish uchun)
+        text = event.raw_text.strip()
+        text_clean = clean_text(text)
 
         # Kalit so‘zlarni tekshirish
         if not any(k in text_clean for k in keywords):
@@ -95,9 +120,20 @@ async def handler(event):
         sender = await event.get_sender()
         username = getattr(sender, 'username', None)
         phone = getattr(sender, 'phone', None)
+        sender_id = getattr(sender, 'id', None)
+
+        # Agar senderda raqam yoki username yo‘q bo‘lsa — matndan qidiramiz
+        text_phone = find_phone_in_text(text)
 
         username_str = f"@{username}" if username else "Berkitilgan"
-        phone_str = f"+{phone}" if phone else "Raqam berkitilgan"
+        phone_str = f"+{phone}" if phone else (text_phone if text_phone else "Raqam berkitilgan")
+
+        # **Eslatma:** endi har doim xabar yuboriladi (even if username/phone/text_phone missing)
+        # Maxsus link — agar sender_id bo'lsa, klikli link; bo'lmasa "Berkitilgan" yozuvi chiqadi
+        if sender_id:
+            special_link = f'<b>🔗 Maxsus link:</b> <a href="tg://user?id={sender_id}">User bilan bog‘lanish</a>'
+        else:
+            special_link = '<b>🔗 Maxsus link:</b> Berkitilgan'
 
         # Yuboriladigan xabar
         message_to_send = (
@@ -106,6 +142,7 @@ async def handler(event):
             f"📍 <b>{group_line}</b>\n\n"
             f"👤 <b>Habar egasi:</b> {username_str}\n\n"
             f"📞 <b>Habar egasi raqami:</b> {phone_str}\n\n"
+            f"{special_link}\n\n"
             f"🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
         )
 
