@@ -1,158 +1,138 @@
 import re
 from telethon import TelegramClient, events
 
-# API ma'lumotlari
+# === API ma'lumotlari ===
 api_id = 28023612
 api_hash = 'fe94ef46addc1b6b8253d5448e8511f0'
 
-# Telegram session
+# === Session nomi ===
 client = TelegramClient('taxi_session', api_id, api_hash)
 
-# Kalit so‘zlar (faqat kichik harflarda)
-keywords = [
-    # Odam bor variantlari
+# === Xabar yuboriladigan kanal ===
+TARGET_CHAT = 'https://t.me/+BFl15wH-PAswZTYy'
+
+# === Kalit so‘zlar (to‘liq ro‘yxat) ===
+KEYWORDS = [
+    # Odam bor
     'odam bor', 'odam bor 1', 'odam bor 1ta', 'odam bor 1 ta',
     'tortta odam bor', "to'rtta odam bor", 'odambor', 'odam borakan', 'odam bor ekan',
     'bitta odam bor', 'ikkita odam bor', 'bita odam bor', 'ikta odam bor',
     'uchta odam bor', 'bir kamplekt odam bor', 'br kamplek odam bor', 'bir komplekt odam bor',
+    'odam bor 2ta', 'odam bor 2 ta', 'odam bor 3ta', 'odam bor 3 ta', 'odam bor 4ta', 'odam bor 4 ta',
+    '2ta odam bor', '3ta odam bor', '4ta odam bor',
 
-    # Ruscha o‘zbekcha yozilishlar
+    # Ruscha / kirillcha
     'одам бор', 'одам бор 1', 'одам бор 1та', 'одам бор 1 та',
     'тортта одам бор', "то'ртта одам бор", 'одамбoр', 'одам боракан', 'одам бор экан',
     'битта одам бор', 'иккита одам бор', 'бита одам бор', 'икта одам бор',
-    'учта одам бор', 'бир кampleкт одам бор', 'бр кampleк одам бор', 'бир комплект одам бор',
+    'учта одам бор', 'бир комплект одам бор', 'бр комплект одам бор',
+    'одам бор 2 та', 'одам бор 3 та', 'одам бор 4 та',
+    '2та одам бор', '3та одам бор', '4та одам бор',
+    'одам бор 2та', 'одам бор 3та', 'одам бор 4та',
 
-    # Rishton/Toshkentga odam bor
+    # Yo‘nalishlar
     'rishtonga odam bor', 'toshkentga odam bor',
     'риштонга одам бор', 'тошкентга одам бор',
 
     # Mashina kerak
     'mashina kerak', 'mashina kere', 'mashina kerek', 'bagajli mashina kerak', 'bagajli mashina kere',
     'машина керак', 'машина керe', 'машина нужен', 'багажли машина керак', 'багажли машина кере',
+    'mashina keraa', 'машина кераа', 'bosh mashina kerak', 'bosh mashina bormikan', 'boshi bormikan',
 
-    # Pochta bor
+    # Pochta
     'pochta bor', 'rishtonga pochta bor', 'rishtondan pochta bor', 'toshkentga pochta bor', 'toshkentdan pochta bor',
     'почта бор', 'риштонга почта бор', 'риштондан почта бор', 'тошкентга почта бор', 'тошкентдан почта бор',
 
-    # Kishi soni bor
+    # Kishilar soni
     '1 kishi bor', '2 kishi bor', '3 kishi bor', '4 kishi bor',
     '1kishi bor', '2kishi bor', '3kishi bor', '4kishi bor',
-    '2ta odam bor', 'odam bor 2 ta', '3ta odam bor', 'odam bor 3ta', 'odam bor 3 ta',
-    '4ta odam bor', 'odam bor 4ta', 'odam bor 4 ta',
     '1 киши бор', '2 киши бор', '3 киши бор', '4 киши бор',
     '1киши бор', '2киши бор', '3киши бор', '4киши бор',
-    '2та одам бор', 'одам бор 2 та', '3та одам бор', 'одам бор 3та', 'одам бор 3 та',
-    '4та одам бор', 'одам бор 4та', 'одам бор 4 та',
 
-    # Ketadi
+    # Yo‘lga chiqish
     'ketadi', 'ketishadi', 'ketishi kerak', 'ketishi', 'ayol kishi ketadi',
     'кeтaди', 'кeтишaди', 'кeтиши кeрaк', 'кeтиши', 'ayол киши кeтaди',
 
-    # Kampilekt
+    # Komplekt odamlar
     'kampilek odam bor', 'kompilekt odam bor', 'komplek odam bor',
     'kampilek одам бор', 'kompilekt одам бор', 'komplek одам бор',
 
     # Dastavka
-    'dastavka bor', 'dastafka',
-    'даставка бор', 'дастaфка',
+    'dastavka bor', 'dastafka', 'даставка бор', 'дастaфка',
 
-    # Mashina kerak boshqa
-    'mashina keraa', 'машина кераа', 'Toshkentdan Qoqonga odam bor', "Toshkendan Qo'qonga odam bor", 
-    "Toshkentdan Fargonaga odam bor", "Toshkentdan Farg'onaga odam bor", 
-    "Toshkendan Fargonaga odam bor", "Bosh mashina kerak", "Bosh mashina bormikan", "Boshi bormikan" 
+    # Maxsus yo‘nalishlar
+    'toshkentdan qoqonga odam bor', "toshkendan qo'qonga odam bor",
+    "toshkentdan fargonaga odam bor", "toshkentdan farg'onaga odam bor",
+    "toshkendan fargonaga odam bor"
 ]
 
-# Xabar yuboriladigan kanal yoki chat
-target_chat = 'https://t.me/+BFl15wH-PAswZTYy'
+# === Matnni tozalovchi funksiya ===
+def clean_text(text: str):
+    return re.sub(r'\s+', ' ', text.lower().strip())
 
-# Matnni tekshirish uchun tayyorlash
-def clean_text(text):
-    return re.sub(r'\s+', ' ', text.strip().lower())
-
-# Matndan raqam topish (turli formatlarga mos)
-def find_phone_in_text(text):
-    # turli formatlarni qamrab oluvchi regex:
-    # misollar: +998901234567, 90 123 45 67, 90-123-45-67, 901234567, 998901234567
+# === Raqamni aniqlovchi funksiya ===
+def find_phone_in_text(text: str):
     patterns = [
-        r'\+?998[\s\-\.\(]*\d{2}[\s\-\.\)]*\d{3}[\s\-\.\)]*\d{2}[\s\-\.\)]*\d{2}',  # +998 90 123 45 67
-        r'\b\d{2}[\s\-\.\)]*\d{3}[\s\-\.\)]*\d{2}[\s\-\.\)]*\d{2}\b',            # 90 123 45 67 or 901234567
-        r'\b\d{9}\b'                                                              # 901234567
+        r'\+?998[\s\-\.\(]*\d{2}[\s\-\.\)]*\d{3}[\s\-\.\)]*\d{2}[\s\-\.\)]*\d{2}',
+        r'\b\d{2}[\s\-\.\)]*\d{3}[\s\-\.\)]*\d{2}[\s\-\.\)]*\d{2}\b',
+        r'\b\d{9}\b'
     ]
     for p in patterns:
-        m = re.search(p, text)
-        if m:
-            num = re.sub(r'\D', '', m.group())
-            # agar 12 ta raqam (998901234567) bo'lsa +998... shakliga o'tkazamiz
+        match = re.search(p, text)
+        if match:
+            num = re.sub(r'\D', '', match.group())
             if num.startswith('998') and len(num) >= 12:
                 return f"+{num[:12]}"
-            # agar 9 ta (901234567) bo'lsa +998 qo'shamiz
             if len(num) == 9:
                 return f"+998{num}"
-            # agar 11-12 ta boshqa shakl bo'lsa ham + qo'shamiz
             if len(num) >= 10:
                 return f"+{num}"
     return None
 
-
+# === Faqat yangi xabarlarni filtrlash ===
 @client.on(events.NewMessage(incoming=True))
-async def handler(event):
+async def filter_new_messages(event):
     try:
-        # Shaxsiy xabarlarni tashlab ketamiz
         if event.is_private or not event.raw_text:
             return
 
-        text = event.raw_text.strip()
-        text_clean = clean_text(text)
-
-        # Kalit so‘zlarni tekshirish
-        if not any(k in text_clean for k in keywords):
+        text_clean = clean_text(event.raw_text)
+        if not any(k in text_clean for k in KEYWORDS):
             return
 
-        # Xabar qayerdan kelganligini aniqlaymiz
         chat = await event.get_chat()
-        if hasattr(chat, 'username') and chat.username:
-            link = f"https://t.me/{chat.username}/{event.id}"
-            group_line = f"Guruh linki: {link} ({chat.title})"
-        else:
-            group_line = "Guruh linki: Berkitilgan"
+        chat_name = getattr(chat, 'title', 'Noma’lum guruh')
 
-        # Username va telefon raqamini olish
+        if getattr(chat, 'username', None):
+            msg_link = f"https://t.me/{chat.username}/{event.id}"
+        else:
+            msg_link = "Berkitilgan"
+
         sender = await event.get_sender()
         username = getattr(sender, 'username', None)
-        phone = getattr(sender, 'phone', None)
         sender_id = getattr(sender, 'id', None)
-
-        # Agar senderda raqam yoki username yo‘q bo‘lsa — matndan qidiramiz
-        text_phone = find_phone_in_text(text)
+        text_phone = find_phone_in_text(event.raw_text)
 
         username_str = f"@{username}" if username else "Berkitilgan"
-        phone_str = f"+{phone}" if phone else (text_phone if text_phone else "Raqam berkitilgan")
+        phone_str = text_phone if text_phone else "Raqam topilmadi"
+        user_link = f'<a href="tg://user?id={sender_id}">Bog‘lanish</a>' if sender_id else "Berkitilgan"
 
-        # **Eslatma:** endi har doim xabar yuboriladi (even if username/phone/text_phone missing)
-        # Maxsus link — agar sender_id bo'lsa, klikli link; bo'lmasa "Berkitilgan" yozuvi chiqadi
-        if sender_id:
-            special_link = f'<b>🔗 Maxsus link:</b> <a href="tg://user?id={sender_id}">User bilan bog‘lanish</a>'
-        else:
-            special_link = '<b>🔗 Maxsus link:</b> Berkitilgan'
-
-        # Yuboriladigan xabar
-        message_to_send = (
-            f"🚖 <b>Xabar topildi!</b>\n\n"
-            f"📄 <b>Matn:</b>\n{text}\n\n"
-            f"📍 <b>{group_line}</b>\n\n"
-            f"👤 <b>Habar egasi:</b> {username_str}\n\n"
-            f"📞 <b>Habar egasi raqami:</b> {phone_str}\n\n"
-            f"{special_link}\n\n"
-            f"🔔 <i>Yangiliklardan xabardor bo‘lib turing!</i>"
+        message = (
+            f"🚖 <b>Yangi xabar topildi!</b>\n\n"
+            f"📄 <b>Matn:</b>\n{event.raw_text}\n\n"
+            f"📍 <b>Guruh:</b> {chat_name}\n"
+            f"🔗 <b>Xabar linki:</b> {msg_link}\n\n"
+            f"👤 <b>Yuboruvchi:</b> {username_str}\n"
+            f"📞 <b>Raqam:</b> {phone_str}\n"
+            f"🧩 <b>Maxsus link:</b> {user_link}"
         )
 
-        await client.send_message(target_chat, message_to_send, parse_mode='html')
-        print("✅ Yuborildi:", text[:60])
+        await client.send_message(TARGET_CHAT, message, parse_mode='html')
+        print(f"✅ Yangi mos xabar yuborildi: {event.raw_text[:60]}...")
 
     except Exception as e:
         print("❌ Xatolik:", e)
 
-
-print("🚕 Taxi bot ishga tushdi...")
+print("🚕 Taxi bot ishga tushdi (faqat yangi xabarlar uchun)...")
 client.start()
 client.run_until_disconnected()
